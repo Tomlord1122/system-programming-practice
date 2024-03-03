@@ -118,7 +118,7 @@ void executeArgs(char **parsed) // 接受字符串數組
         }
         exit(0);
     }
-    else // paren
+    else // parent
     {
         wait(NULL);
         return;
