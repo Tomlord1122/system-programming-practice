@@ -1,5 +1,6 @@
 #include <stdio.h>             // printf, fprintf, stderr
 #include <string.h>            // strlen, strcpy, strcmp
+#include <sys/wait.h>          // wait
 #include <stdlib.h>            // atoi
 #include <unistd.h>            // fork, execvp, pipe, dup2, close, STDIN_FILENO, STDOUT_FILENO
 #include <readline/readline.h> // readline
