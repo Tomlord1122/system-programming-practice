@@ -290,7 +290,7 @@ int main()
     {
         signal(SIGINT, signalHandler);
         // take input
-        printDir();
+        // printDir();
         if (Input(inputString))
         {
             continue;

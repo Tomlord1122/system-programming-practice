@@ -7,3 +7,6 @@ cs5374_sh: cs5374_sh.c
 
 clean:
 	rm -f cs5374_sh
+
+
+.PHONY: clean
