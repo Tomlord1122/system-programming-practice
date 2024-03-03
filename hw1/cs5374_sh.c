@@ -203,7 +203,6 @@ int cmdHandler(char **parsed)
 
     int switchArg = 0;
     char *ListofCmds[NoOfCmds];
-    char *username;
 
     ListofCmds[0] = "cd";
     ListofCmds[1] = "exit";
