@@ -291,6 +291,7 @@ int main()
         signal(SIGINT, signalHandler);
         // take input
         // printDir();
+        printf("\n");
         if (Input(inputString))
         {
             continue;
