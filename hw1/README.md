@@ -15,7 +15,10 @@ make
 ## Execution
 
 To run the shell, execute the compiled binary:
+
+```
 ./cs5374_sh
+```
 
 ## Features
 
