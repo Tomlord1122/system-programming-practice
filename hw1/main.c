@@ -7,6 +7,8 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 #include <limits.h> // _POSIX_ARG_MAX
+#include <signal.h>
+#include <errno.h>
 
 // _POSIX_ARG_MAX  => max number of commands to be supported
 #define clear() printf("\033[H\033[J") // \033 is escape character, \033[H moves cursor to top left, \033[J clears screen
@@ -28,20 +30,12 @@ int Input(char *str)
     }
 }
 
-// Function to display the last n commands from history
-// void displayHistory(int num)
-// {
-//     HIST_ENTRY **historyList = history_list();
-//     if (historyList)
-//     {
-//         int total = history_length;
-//         int start = (total <= num) ? 0 : total - num; // start from the last n commands
-//         for (int i = start; i < total; ++i)
-//         {
-//             printf(" %5d  %s\n", i + history_base, historyList[i]->line);
-//         }
-//     }
-// }
+void signalHandler(int sigNum)
+{
+    signal(SIGINT, signalHandler);
+    fflush(stdout);
+    exit(0);
+}
 
 void displayHistory(int last_n)
 {
@@ -80,15 +74,13 @@ void executeArgs(char **parsed) // 接受字符串數組
 
     if (pid == -1) // fork fail
     {
-        // fprintf("error: %s\n", "Failed forking child..");
-        fprintf(stderr, "Failed forking child..");
+        fprintf(stderr, "error: %s\n", "fork fail");
     }
     else if (pid == 0) // success
     {
         if (execvp(parsed[0], parsed) < 0) // 在當前process執行parsed[0]指定的程序
         {
-            // fprintf("error: %s\n", "Failed to execute command..");
-            fprintf(stderr, "Failed to execute command..");
+            fprintf(stderr, "error: %s\n", "execvp fail");
         }
         exit(0);
     }
@@ -111,13 +103,14 @@ void execArgsPiped(char **parsed, char **parsedpipe)
 
     if (pipe(pipefd) < 0)
     {
-        printf("\nPipe could not be initialized");
+        fprintf(stderr, "error: %s\n", "Pipe could not be initialized");
         return;
     }
     p1 = fork();
     if (p1 < 0)
     {
-        printf("\nCould not fork");
+
+        fprintf(stderr, "error: %s\n", "Could not fork");
         return;
     }
 
@@ -131,7 +124,8 @@ void execArgsPiped(char **parsed, char **parsedpipe)
 
         if (execvp(parsed[0], parsed) < 0)
         {
-            printf("\nCould not execute command 1..");
+            fprintf(stderr, "error: %s\n", "Could not execute command 1..");
+
             exit(0);
         }
     }
@@ -142,7 +136,7 @@ void execArgsPiped(char **parsed, char **parsedpipe)
 
         if (p2 < 0)
         {
-            printf("\nCould not fork");
+            fprintf(stderr, "error: %s\n", "Could not fork");
             return;
         }
 
@@ -155,7 +149,7 @@ void execArgsPiped(char **parsed, char **parsedpipe)
             close(pipefd[0]);
             if (execvp(parsedpipe[0], parsedpipe) < 0)
             {
-                printf("\nCould not execute command 2..");
+                fprintf(stderr, "error: %s\n", "Could not execute command 2..");
                 exit(0);
             }
         }
@@ -294,7 +288,7 @@ int main()
 
     while (1)
     {
-
+        signal(SIGINT, signalHandler);
         // take input
         printDir();
         if (Input(inputString))
@@ -319,4 +313,15 @@ int main()
             execArgsPiped(parsedArgs, parsedArgsPiped);
         }
     }
+
+    for (int i = 0; parsedArgs[i] != NULL; i++)
+    {
+        free(parsedArgs[i]);
+    }
+    for (int i = 0; parsedArgsPiped[i] != NULL; i++)
+    {
+        free(parsedArgsPiped[i]);
+    }
+
+    return 0;
 }
