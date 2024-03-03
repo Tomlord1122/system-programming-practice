@@ -1,14 +1,11 @@
-#include <stdio.h>
-#include <string.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <readline/readline.h>
-#include <readline/history.h>
-#include <limits.h> // _POSIX_ARG_MAX
+#include <stdio.h>             // printf, fprintf, stderr
+#include <string.h>            // strlen, strcpy, strcmp
+#include <stdlib.h>            // atoi
+#include <unistd.h>            // fork, execvp, pipe, dup2, close, STDIN_FILENO, STDOUT_FILENO
+#include <readline/readline.h> // readline
+#include <readline/history.h>  // add_history, history_get, history_length, history_base, clear_history
+#include <limits.h>            // _POSIX_ARG_MAX
 #include <signal.h>
-#include <errno.h>
 
 // _POSIX_ARG_MAX  => max number of commands to be supported
 #define clear() printf("\033[H\033[J") // \033 is escape character, \033[H moves cursor to top left, \033[J clears screen
@@ -22,10 +19,12 @@ int Input(char *str)
     {
         add_history(buffer);
         strcpy(str, buffer); // 把 buffer 複製到 str
+        free(buffer);
         return 0;
     }
     else
     {
+        free(buffer);
         return 1; // empty string
     }
 }
@@ -34,6 +33,7 @@ void signalHandler(int sigNum)
 {
     signal(SIGINT, signalHandler);
     fflush(stdout);
+    printf("\nTerminating the shell...\n"); // 提醒用戶 shell 正在終止
     exit(0);
 }
 
@@ -63,7 +63,41 @@ void printDir()
 {
     char cwd[1024];
     getcwd(cwd, sizeof(cwd));
-    printf("\nDir: %s", cwd);
+    printf("\n%s", cwd);
+}
+
+// return the number of pipe
+int parsePipe(char *str, char **parsed)
+{
+    int i = 0;
+    while (i < _POSIX_ARG_MAX)
+    {
+        parsed[i] = strsep(&str, "|");
+        if (parsed[i] == NULL)
+        {
+            break;
+        }
+        i++;
+    }
+    return i - 1;
+}
+
+// Function to parse command words
+void parseSpace(char *str, char **parsed)
+{
+    int i;
+    for (i = 0; i < _POSIX_ARG_MAX; i++)
+    {
+        parsed[i] = strsep(&str, " "); // strsep: 用空格分割字串
+        if (parsed[i] == NULL)         // 沒有更多空格了
+        {
+            break;
+        }
+        if (strlen(parsed[i]) == 0) // 讓parsed[i]不是空字串
+        {
+            i--;
+        }
+    }
 }
 
 // Function to execute system command
@@ -92,73 +126,73 @@ void executeArgs(char **parsed) // 接受字符串數組
 }
 
 // Function where the piped system commands is executed
-void execArgsPiped(char **parsed, char **parsedpipe)
+void execArgsPiped(char **parsed, int pipeNum)
 {
-
-    // pipefd[0] refers to the read end of the pipe
-    // pipefd[1] refers to the write end of the pipe
-    // 第一個輸出連到第二個輸入
-    int pipefd[2];
-    pid_t p1, p2;
-
-    if (pipe(pipefd) < 0)
+    int pipefds[2 * pipeNum];
+    // initPipe(pipefds, pipeNum);
+    for (int i = 0; i < pipeNum; i++)
     {
-        fprintf(stderr, "error: %s\n", "Pipe could not be initialized");
-        return;
-    }
-    p1 = fork();
-    if (p1 < 0)
-    {
-
-        fprintf(stderr, "error: %s\n", "Could not fork");
-        return;
-    }
-
-    if (p1 == 0)
-    {
-        // Child 1 executing..
-        // It only needs to write at the write end
-        close(pipefd[0]);               // close read end
-        dup2(pipefd[1], STDOUT_FILENO); // 將標準輸出重定向到pipefd[1]
-        close(pipefd[1]);               // close write end
-
-        if (execvp(parsed[0], parsed) < 0)
+        if (pipe(pipefds + i * 2) < 0)
         {
-            fprintf(stderr, "error: %s\n", "Could not execute command 1..");
-
-            exit(0);
+            fprintf(stderr, "error: %s\n", "pipe fail");
         }
     }
-    else
+
+    int pid;
+    int j = 0;
+    while (parsed[j])
     {
-        // Parent executing
-        p2 = fork();
-
-        if (p2 < 0)
+        pid = fork();
+        if (pid == 0)
         {
-            fprintf(stderr, "error: %s\n", "Could not fork");
-            return;
-        }
-
-        // Child 2 executing..
-        // It only needs to read at the read end
-        if (p2 == 0)
-        {
-            close(pipefd[1]);
-            dup2(pipefd[0], STDIN_FILENO);
-            close(pipefd[0]);
-            if (execvp(parsedpipe[0], parsedpipe) < 0)
+            // If not first command, redirect stdin
+            if (j != 0)
             {
-                fprintf(stderr, "error: %s\n", "Could not execute command 2..");
-                exit(0);
+                //
+                if (dup2(pipefds[(j - 1) * 2], STDIN_FILENO) < 0)
+                {
+                    fprintf(stderr, "error: %s\n", "dup2 fail");
+                    exit(EXIT_FAILURE);
+                }
+            }
+            // If not last command
+            if (parsed[j + 1] != NULL)
+            {
+                if (dup2(pipefds[j * 2 + 1], STDOUT_FILENO) < 0)
+                {
+                    fprintf(stderr, "error: %s\n", "dup2 fail");
+                    exit(EXIT_FAILURE);
+                }
+            }
+            // Close all pipes
+            for (int i = 0; i < 2 * pipeNum; i++)
+            {
+                close(pipefds[i]);
+            }
+            char *parsedCommand[_POSIX_ARG_MAX];
+            parseSpace(parsed[j], parsedCommand); // Assuming parseSpace is a function that splits the command into program and arguments
+            if (execvp(parsedCommand[0], parsedCommand) < 0)
+            {
+                fprintf(stderr, "error: %s\n", "execvp fail");
+                exit(EXIT_FAILURE);
             }
         }
-        else
+        else if (pid < 0)
         {
-            // parent executing, waiting for two children
-            wait(NULL);
-            wait(NULL);
+            fprintf(stderr, "error: %s\n", "fork fail");
+            exit(EXIT_FAILURE);
         }
+        j++;
+    }
+
+    for (int i = 0; i < 2 * pipeNum; i++)
+    {
+        close(pipefds[i]);
+    }
+
+    for (int i = 0; i < pipeNum + 1; i++)
+    {
+        wait(NULL);
     }
 }
 
@@ -188,7 +222,14 @@ int cmdHandler(char **parsed)
     switch (switchArg)
     {
     case 1: // cd [dir]
-        chdir(parsed[1]);
+        if (parsed[1] == NULL)
+        {
+            fprintf(stderr, "error: %s\n", "cd: missing argument");
+        }
+        if (chdir(parsed[1]) != 0)
+        {
+            fprintf(stderr, "error: %s\n", "cd: fail to change directory");
+        }
         return 1;
     case 2: // exit
         exit(0);
@@ -214,69 +255,28 @@ int cmdHandler(char **parsed)
     return 0;
 }
 
-// Function to parse command words
-int parsePipe(char *str, char **parsed)
-{
-    for (int i = 0; i < 2; i++)
-    {
-        parsed[i] = strsep(&str, "|");
-        if (parsed[i] == NULL)
-        {
-            break;
-        }
-    }
-
-    if (parsed[1] == NULL)
-    {
-        return 0;
-    }
-    else
-    {
-        return 1;
-    }
-}
-
-// Function to parse command words
-void parseSpace(char *str, char **parsed)
-{
-    int i;
-    for (i = 0; i < _POSIX_ARG_MAX; i++)
-    {
-        parsed[i] = strsep(&str, " "); // strsep: 用空格分割字串
-        if (parsed[i] == NULL)         // 沒有更多空格了
-        {
-            break;
-        }
-        if (strlen(parsed[i]) == 0) // 讓parsed[i]不是空字串
-        {
-            i--;
-        }
-    }
-}
-
 // Function to process the command
 int processString(char *str, char **parsed, char **parsedpipe)
 {
 
-    char *strpiped[2];
+    char *strpiped[_POSIX_ARG_MAX];
     int piped = 0;
-    piped = parsePipe(str, strpiped); // 有pipe就會回傳1
+    piped = parsePipe(str, strpiped); // return the number of pipe
 
-    if (piped)
+    if (piped > 0)
     {
-        parseSpace(strpiped[0], parsed);
-        parseSpace(strpiped[1], parsedpipe);
+        execArgsPiped(strpiped, piped);
     }
-    else
+    else // no pipe
     {
 
         parseSpace(str, parsed);
+        if (cmdHandler(parsed))
+            return 0;
+        else
+            return 1;
     }
-
-    if (cmdHandler(parsed))
-        return 0;
-    else
-        return 1 + piped;
+    return 1 + piped;
 }
 
 int main()
@@ -299,18 +299,14 @@ int main()
         // process
         execFlag = processString(inputString, parsedArgs, parsedArgsPiped);
 
-        // 0 -> no command or builtin command
-        // 1 -> simple command
-        // 2 -> piped command
-
         // execute
         if (execFlag == 1)
         {
             executeArgs(parsedArgs);
         }
-        if (execFlag == 2)
+        if (execFlag > 1)
         {
-            execArgsPiped(parsedArgs, parsedArgsPiped);
+            execArgsPiped(parsedArgs, execFlag - 1);
         }
     }
 
