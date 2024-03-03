@@ -1,8 +1,8 @@
-# CS5374 Shell Program
+# CSIE5374 Shell Program
 
 ## Introduction
 
-This is a simple shell program for CS5374 homework. It supports basic command execution, piping, and built-in commands like cd, exit, and history.
+This is a simple shell program for CSIE5374 homework. It supports basic command execution, piping, and built-in commands like cd, exit, and history.
 
 ## Compilation
 
