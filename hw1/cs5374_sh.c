@@ -224,16 +224,7 @@ int cmdHandler(char **parsed)
     case 1: // cd [dir]
         if (parsed[1] == NULL)
         {
-            // 如果沒有提供目錄名，則改為用戶的家目錄
-            char *homeDir = getenv("HOME");
-            if (homeDir == NULL)
-            {
-                fprintf(stderr, "error: %s\n", "cd: HOME not set");
-            }
-            else if (chdir(homeDir) != 0)
-            {
-                fprintf(stderr, "error: %s\n", "cd: fail to change to home directory");
-            }
+            fprintf(stderr, "error: %s\n", "cd: missing argument");
         }
         else if (chdir(parsed[1]) != 0)
         {
