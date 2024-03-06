@@ -18,13 +18,19 @@ Basically, your main usage is:
     t.print_results()
     t.reset()
 """
-
 ##################### Basic Executables #########################
 # ls should not be found
 t.add_test("ls", GENERAL_ERROR)
 
 # But /bin/echo should work
 t.add_test("/bin/echo hello world", "hello world")
+
+# Check if /bin/date works
+t.add_test("/bin/date", "[A-Za-z]{3} [A-Za-z]{3} [ \d]{2} [\d]{2}:[\d]{2}:[\d]{2} [A-Za-z]{3} [\d]{4}")
+
+# Check if /bin/ls (with full path) is found
+
+
 t.run()
 t.print_results()
 t.reset()
@@ -36,9 +42,20 @@ t.add_test("/bin/pwd", "/tmp")
 t.add_test("cd /var", "")
 t.add_test("/bin/pwd", "/var")
 t.add_test("cd", GENERAL_ERROR)
+
+# Test that history works
+
+
+# Test that exit works with a specific message
+t.add_test("exit", "")
+
 t.run()
 t.print_results()
 t.reset()
+
+# Additional tests for piping
+t.add_test("/bin/echo hello | /usr/bin/wc -w", "1")
+t.add_test("/bin/ls | /usr/bin/wc -l", ".+")
 
 t.run()
 t.print_results()

@@ -18,7 +18,7 @@ int Input(char *str)
     buffer = readline("$"); // read a line from the user
     if (strlen(buffer) != 0)
     {
-         HIST_ENTRY *entry = history_get(history_length);
+        HIST_ENTRY *entry = history_get(history_length);
         if (entry == NULL || strcmp(entry->line, buffer) != 0)
         {
             add_history(buffer);
@@ -241,16 +241,24 @@ int cmdHandler(char **parsed)
     case 3: // history [-c][n]
         if (parsed[1] == NULL)
         {
-            displayHistory(10); // Display last 10 commands
+            displayHistory(10); // display last 10 commands
         }
         else if (strcmp(parsed[1], "-c") == 0)
         {
-            clearHistory(); // Clear history
+            clearHistory();
         }
         else
         {
-            int n = atoi(parsed[1]);
-            displayHistory(n); // Display last n commands
+            char *endPtr;
+            long n = strtol(parsed[1], &endPtr, 10);
+            if (*endPtr != '\0' || n <= 0)
+            {
+                fprintf(stderr, "error: %s\n", "history: argument must be a positive number");
+            }
+            else
+            {
+                displayHistory((int)n);
+            }
         }
         return 1;
     default:
@@ -292,7 +300,7 @@ int main()
     signal(SIGINT, signalHandler);
     while (1)
     {
-     
+
         // take input
         // printDir();
         printf("\n");
