@@ -15,10 +15,14 @@
 int Input(char *str)
 {
     char *buffer;
-    buffer = readline("\n$ "); // read a line from the user
+    buffer = readline("$"); // read a line from the user
     if (strlen(buffer) != 0)
     {
-        add_history(buffer);
+         HIST_ENTRY *entry = history_get(history_length);
+        if (entry == NULL || strcmp(entry->line, buffer) != 0)
+        {
+            add_history(buffer);
+        }
         strcpy(str, buffer); // 把 buffer 複製到 str
         free(buffer);
         return 0;
@@ -34,7 +38,7 @@ void signalHandler(int sigNum)
 {
     signal(SIGINT, signalHandler);
     fflush(stdout);
-    printf("\nTerminating the shell...\n"); // 提醒用戶 shell 正在終止
+    // printf("\nTerminating the shell...\n"); // 提醒用戶 shell 正在終止
     exit(0);
 }
 
@@ -285,10 +289,10 @@ int main()
     char *parsedArgs[_POSIX_ARG_MAX];
     char *parsedArgsPiped[_POSIX_ARG_MAX];
     int execFlag = 0;
-
+    signal(SIGINT, signalHandler);
     while (1)
     {
-        signal(SIGINT, signalHandler);
+     
         // take input
         // printDir();
         printf("\n");
