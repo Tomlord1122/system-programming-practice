@@ -1,0 +1,14 @@
+{
+    "files.associations": {
+        "sched.h": "c",
+        "module.h": "c",
+        "syscalls.h": "c",
+        "dirent.h": "c",
+        "slab.h": "c",
+        "version.h": "c",
+        "signal.h": "c",
+        "uaccess.h": "c",
+        "cdev.h": "c",
+        "syscall.h": "c"
+    }
+}
