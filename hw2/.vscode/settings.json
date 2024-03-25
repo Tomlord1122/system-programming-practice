@@ -9,6 +9,8 @@
         "signal.h": "c",
         "uaccess.h": "c",
         "cdev.h": "c",
-        "syscall.h": "c"
+        "syscall.h": "c",
+        "fs.h": "c",
+        "reboot.h": "c"
     }
 }
