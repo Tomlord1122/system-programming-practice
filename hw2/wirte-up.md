@@ -72,7 +72,7 @@ ps aux | grep test
 sudo systemctl --force --force poweroff # reboot command for testing IOCTL_MOD_HOOK
 ```
 
-**Note**: Because I am using UTM to build the environment, so we need to execute sudo systemctl --force --force poweroff rather than reboot.
+**Note**: Because I am using UTM to build the environment, so we need to execute `sudo systemctl --force --force poweroff` rather than reboot.
 
 ### Note
 
