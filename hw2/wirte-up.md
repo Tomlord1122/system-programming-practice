@@ -6,6 +6,14 @@ This project is a rootkit developed for the CSIE5374 course homework. It is desi
 
 **Warning**: This rootkit is intended for educational purposes only. Use it at your own risk and only in environments where you have permission to do so. Improper use of this rootkit can lead to ethical concerns and potential legal issues.
 
+# References
+
+1. https://xcellerator.github.io/posts/linux_rootkits_01/
+2. https://github.com/xcellerator/linux_kernel_hacking
+3. https://blog.csdn.net/whatday/article/details/102488130
+4. https://blog.csdn.net/weixin_45030965/article/details/129212657
+5. chatGPT
+
 ## Features
 
 - **File Hiding**: Dynamically hides specified files from the file system, making them invisible to user-level queries.
