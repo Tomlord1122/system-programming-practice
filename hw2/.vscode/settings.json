@@ -14,6 +14,7 @@
         "reboot.h": "c",
         "kallsyms.h": "c",
         "kernel.h": "c",
-        "typeinfo": "c"
+        "typeinfo": "c",
+        "kprobes.h": "c"
     }
 }

