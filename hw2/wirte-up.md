@@ -73,11 +73,16 @@ To hide a file named `test2.c`, you would run the `rootkit_controller` applicati
 If you want to test sys_kill and sys_reboot and hide file, you can use the following process and command to check the process state and pid.
 
 ```
-ps ao pid,comm  # Check out the test process when testing IOCTL_MOD_MASQ
+# Check out the test process when testing IOCTL_MOD_MASQ
+ps ao pid,comm
 
 ps aux | grep test
 
-sudo systemctl --force --force poweroff # reboot command for testing IOCTL_MOD_HOOK
+# reboot command for testing IOCTL_MOD_HOOK
+sudo systemctl --force --force poweroff
+
+# check the rootkit module
+lsmod | head
 ```
 
 **Note**: Because I am using UTM to build the environment, so we need to execute `sudo systemctl --force --force poweroff` rather than reboot.
