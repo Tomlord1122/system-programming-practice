@@ -60,13 +60,15 @@ Upon execution, the application will prompt you to enter a choice corresponding 
 
 ### Example Usage
 
-To hide a file named `test2.c`, you would run the `rootkit_controller` application and enter `4` when prompted for a choice. The application will then send an IOCTL request to the rootkit to hide the specified file.
+To hide a file named `test2.c`, you would run the `rootkit_controller` application and enter `4` when prompted for a choice. The application will then send an IOCTL request to the rootkit to hide the specified file, and use `ls` to check the file whether is hided or not.
 
 If you want to test sys_kill and sys_reboot and hide file, you can use the following process and command to check the process state and pid.
 
 ```
 ps ao pid,comm  # Check out the test process when testing IOCTL_MOD_MASQ
+
 ps aux | grep test
+
 sudo systemctl --force --force poweroff # reboot command for testing IOCTL_MOD_HOOK
 ```
 
