@@ -12,6 +12,8 @@
         "syscall.h": "c",
         "fs.h": "c",
         "reboot.h": "c",
-        "kallsyms.h": "c"
+        "kallsyms.h": "c",
+        "kernel.h": "c",
+        "typeinfo": "c"
     }
 }
