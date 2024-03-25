@@ -54,6 +54,14 @@ int main(void)
             break;
         case 4: // IOCTL_FILE_HIDE
 
+            struct hided_file file = {
+                .name = "test2.c"};
+            if (ioctl(fd, IOCTL_FILE_HIDE, &file) < 0)
+            {
+                perror("ioctl");
+                close(fd);
+                return 1;
+            }
             break;
 
         default:

