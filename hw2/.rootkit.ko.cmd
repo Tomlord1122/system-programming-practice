@@ -1,0 +1,1 @@
+cmd_/home/tomlord/sys/hw2/rootkit.ko := ld -r  -EL  -maarch64elf -z noexecstack   --build-id=sha1  -T scripts/module.lds -o /home/tomlord/sys/hw2/rootkit.ko /home/tomlord/sys/hw2/rootkit.o /home/tomlord/sys/hw2/rootkit.mod.o;  true
