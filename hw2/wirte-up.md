@@ -74,7 +74,7 @@ sudo systemctl --force --force poweroff # reboot command for testing IOCTL_MOD_H
 
 ### Note
 
-Ensure that the rootkit module is loaded into the kernel before attempting to use the `rootkit_controller` application. The application requires `/dev/rootkit` device file to be present, which is created by the rootkit module upon loading.
+Ensure that the rootkit module is loaded into the kernel before attempting to use the `a.out` application. The application requires `/dev/rootkit` device file to be present, which is created by the rootkit module upon loading.
 
 ### Exiting the Application
 
