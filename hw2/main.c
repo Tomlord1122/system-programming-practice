@@ -24,6 +24,8 @@ int main(void)
         .len = 1,
         .list = &masq};
 
+    struct hided_file file = {
+        .name = "test2.c"};
     while (1)
     {
         int choice;
@@ -54,8 +56,6 @@ int main(void)
             break;
         case 4: // IOCTL_FILE_HIDE
 
-            struct hided_file file = {
-                .name = "test2.c"};
             if (ioctl(fd, IOCTL_FILE_HIDE, &file) < 0)
             {
                 perror("ioctl");

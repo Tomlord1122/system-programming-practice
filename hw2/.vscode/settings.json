@@ -11,6 +11,7 @@
         "cdev.h": "c",
         "syscall.h": "c",
         "fs.h": "c",
-        "reboot.h": "c"
+        "reboot.h": "c",
+        "kallsyms.h": "c"
     }
 }
