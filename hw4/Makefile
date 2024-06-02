@@ -1,21 +1,19 @@
-
+CLANG_PATH ?= /home/tomlord/llvm-project/build/bin
 
 # Generate the LLVM pass
 libVTableCheckerPass.so: 
-	cd build
-	cmake ..
-	make
+	cd build && cmake .. && make
 	
 # Compile the runtime library
-librtlib.so: rtlib.c
-	/pass/to/llvm/project/clang -c rtlib.c -o rtlib.o
+librtlib.so:
+	$(CLANG_PATH)/clang -c rtlib.c -o rtlib.o
 
 # Compile the test program
-test: test.cpp
-	/path/to/llvm-project/build/bin/clang++ -fpass-plugin=`echo ../build/passes/hw4.so` ../test.cpp ./rtlib.o
+test: test.cpp libVTableCheckerPass.so librtlib.so
+	$(CLANG_PATH)/clang++ -fpass-plugin=./build/passes/hw4.so ./test.cpp ./rtlib.o
 
 # Phony target to build everything
-all: libVTableCheckerPass.so librtlib.so test
+all: test
 
 # Clean up generated files
 clean:
