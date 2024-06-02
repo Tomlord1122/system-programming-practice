@@ -1,0 +1,1 @@
+/usr/bin/c++ -fPIC  -Wl,-rpath-link,  -Wl,--gc-sections -shared  -o hw4.so CMakeFiles/hw4.dir/hw4.cpp.o   -L/home/tomlord/llvm-project/build/./lib  -Wl,-rpath,"\$ORIGIN/../lib:/home/tomlord/llvm-project/build/./lib" 
