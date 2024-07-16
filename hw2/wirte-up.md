@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This project is a rootkit developed for the CSIE5374 course homework. It is designed as a kernel module that demonstrates various rootkit techniques on Linux systems. The rootkit is capable of hiding files, processes, and itself from system tools, intercepting system calls, and manipulating process signals.
+This project is designed as a kernel module that demonstrates various rootkit techniques on Linux systems. The rootkit is capable of hiding files, processes, and itself from system tools, intercepting system calls, and manipulating process signals.
 
 **Warning**: This rootkit is intended for educational purposes only. Use it at your own risk and only in environments where you have permission to do so. Improper use of this rootkit can lead to ethical concerns and potential legal issues.
 
