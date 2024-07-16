@@ -2,7 +2,7 @@
 
 ## Introduction
 
-This is a simple shell program for CSIE5374 homework. It supports basic command execution, piping, and built-in commands like cd, exit, and history.
+This simple shell program supports basic command execution, piping, and built-in commands like cd, exit, and history.
 
 ## Compilation
 
