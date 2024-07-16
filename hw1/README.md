@@ -1,4 +1,4 @@
-# CSIE5374 Shell Program
+# Simple Shell Program
 
 ## Introduction
 
