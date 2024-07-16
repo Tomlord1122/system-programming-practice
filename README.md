@@ -1,1 +1,1 @@
-System programming and dive into linux kernel.
+Practice system programming and dive into linux kernel.
