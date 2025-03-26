@@ -1,21 +1,31 @@
 #include <stdio.h>             // printf, fprintf, stderr
 #include <string.h>            // strlen, strcpy, strcmp
 #include <sys/wait.h>          // wait
-#include <stdlib.h>            // atoi
+#include <stdlib.h>            // atoi 
 #include <unistd.h>            // fork, execvp, pipe, dup2, close, STDIN_FILENO, STDOUT_FILENO
 #include <readline/readline.h> // readline
 #include <readline/history.h>  // add_history, history_get, history_length, history_base, clear_history
-#include <limits.h>            // _POSIX_ARG_MAX
+#include <limits.h>            // _POSIX_ARG_MAX -> 4096
 #include <signal.h>
+#include <errno.h>
 
-// _POSIX_ARG_MAX  => max number of commands to be supported
-#define clear() printf("\033[H\033[J") // \033 is escape character, \033[H moves cursor to top left, \033[J clears screen
+
+
+// Add these global declarations at the top of the file, after the includes
+char *g_parsedArgs[_POSIX_ARG_MAX] = {NULL};
+char *g_parsedArgsPiped[_POSIX_ARG_MAX] = {NULL};
 
 // Function to take input
 int Input(char *str)
 {
     char *buffer;
-    buffer = readline("$"); // read a line from the user
+    buffer = readline("$"); // Exactly $ with no extra spaces
+    if (strlen(buffer) >= _POSIX_ARG_MAX)
+    {
+        fprintf(stderr, "error: %s\n", "Command too long");
+        free(buffer);
+        return 1;
+    }
     if (strlen(buffer) != 0)
     {
         HIST_ENTRY *entry = history_get(history_length);
@@ -34,18 +44,42 @@ int Input(char *str)
     }
 }
 
+void cleanup(char **parsed, char **parsedpipe)
+{
+    if (parsed != NULL) {
+        for (int i = 0; parsed[i] != NULL; i++)
+        {
+            if (parsed[i] != NULL) {
+                free(parsed[i]);
+                parsed[i] = NULL;
+            }
+        }
+    }
+    
+    if (parsedpipe != NULL) {
+        for (int i = 0; parsedpipe[i] != NULL; i++)
+        {
+            if (parsedpipe[i] != NULL) {
+                free(parsedpipe[i]);
+                parsedpipe[i] = NULL;
+            }
+        }
+    }
+}
+
 void signalHandler(int sigNum)
 {
     signal(SIGINT, signalHandler);
-    fflush(stdout);
-    // printf("\nTerminating the shell...\n"); // 提醒用戶 shell 正在終止
+    printf("\n");  // Add newline for clean display
+    clear_history();
+    cleanup(g_parsedArgs, g_parsedArgsPiped);
     exit(0);
 }
 
 void displayHistory(int last_n)
 {
     HIST_ENTRY *historyList;
-    int total = history_length; // Total number of commands in history
+    int total = history_length;
     int start = (total <= last_n) ? 0 : total - last_n;
 
     for (int i = start; i < total; ++i)
@@ -53,7 +87,7 @@ void displayHistory(int last_n)
         historyList = history_get(i + history_base);
         if (historyList)
         {
-            printf("%5d  %s\n", i + history_base, historyList->line);
+            printf("%5d  %s\n", i + history_base, historyList->line); // Right-align to 5 characters
         }
     }
 }
@@ -75,12 +109,23 @@ void printDir()
 int parsePipe(char *str, char **parsed)
 {
     int i = 0;
+    char *token;
     while (i < _POSIX_ARG_MAX)
     {
-        parsed[i] = strsep(&str, "|");
-        if (parsed[i] == NULL)
+        token = strsep(&str, "|");
+        if (token == NULL)
         {
+            parsed[i] = NULL;
             break;
+        }
+        parsed[i] = strdup(token);  // Use strdup to properly allocate memory
+        if (parsed[i] == NULL) {
+            fprintf(stderr, "error: %s\n", strerror(errno));
+            // Clean up previously allocated memory
+            for (int j = 0; j < i; j++) {
+                free(parsed[j]);
+            }
+            exit(EXIT_FAILURE);
         }
         i++;
     }
@@ -91,18 +136,31 @@ int parsePipe(char *str, char **parsed)
 void parseSpace(char *str, char **parsed)
 {
     int i;
+    char *token;
     for (i = 0; i < _POSIX_ARG_MAX; i++)
     {
-        parsed[i] = strsep(&str, " "); // strsep: 用空格分割字串
-        if (parsed[i] == NULL)         // 沒有更多空格了
+        token = strsep(&str, " ");
+        if (token == NULL)
         {
+            parsed[i] = NULL;
             break;
         }
-        if (strlen(parsed[i]) == 0) // 讓parsed[i]不是空字串
+        if (strlen(token) == 0)
         {
             i--;
+            continue;
+        }
+        parsed[i] = strdup(token);  // Use strdup to properly allocate memory
+        if (parsed[i] == NULL) {
+            fprintf(stderr, "error: %s\n", strerror(errno));
+            // Clean up previously allocated memory
+            for (int j = 0; j < i; j++) {
+                free(parsed[j]);
+            }
+            exit(EXIT_FAILURE);
         }
     }
+    parsed[i] = NULL;  // Ensure array is NULL-terminated
 }
 
 // Function to execute system command
@@ -139,7 +197,7 @@ void execArgsPiped(char **parsed, int pipeNum)
     {
         if (pipe(pipefds + i * 2) < 0)
         {
-            fprintf(stderr, "error: %s\n", "pipe fail");
+            fprintf(stderr, "error: %s\n", strerror(errno));
         }
     }
 
@@ -153,10 +211,9 @@ void execArgsPiped(char **parsed, int pipeNum)
             // If not first command, redirect stdin
             if (j != 0)
             {
-                //
                 if (dup2(pipefds[(j - 1) * 2], STDIN_FILENO) < 0)
                 {
-                    fprintf(stderr, "error: %s\n", "dup2 fail");
+                    fprintf(stderr, "error: %s\n", strerror(errno));
                     exit(EXIT_FAILURE);
                 }
             }
@@ -165,7 +222,7 @@ void execArgsPiped(char **parsed, int pipeNum)
             {
                 if (dup2(pipefds[j * 2 + 1], STDOUT_FILENO) < 0)
                 {
-                    fprintf(stderr, "error: %s\n", "dup2 fail");
+                    fprintf(stderr, "error: %s\n", strerror(errno));
                     exit(EXIT_FAILURE);
                 }
             }
@@ -178,13 +235,13 @@ void execArgsPiped(char **parsed, int pipeNum)
             parseSpace(parsed[j], parsedCommand); // Assuming parseSpace is a function that splits the command into program and arguments
             if (execvp(parsedCommand[0], parsedCommand) < 0)
             {
-                fprintf(stderr, "error: %s\n", "execvp fail");
+                fprintf(stderr, "error: %s\n", strerror(errno));
                 exit(EXIT_FAILURE);
             }
         }
         else if (pid < 0)
         {
-            fprintf(stderr, "error: %s\n", "fork fail");
+            fprintf(stderr, "error: %s\n", strerror(errno));
             exit(EXIT_FAILURE);
         }
         j++;
@@ -232,7 +289,7 @@ int cmdHandler(char **parsed)
         }
         else if (chdir(parsed[1]) != 0)
         {
-            fprintf(stderr, "error: %s\n", "cd: fail to change directory");
+            fprintf(stderr, "error: %s\n", strerror(errno));
         }
         return 1;
     case 2: // exit
@@ -274,67 +331,49 @@ int cmdHandler(char **parsed)
 // Function to process the command
 int processString(char *str, char **parsed, char **parsedpipe)
 {
-
     char *strpiped[_POSIX_ARG_MAX];
-    int piped = 0;
-    piped = parsePipe(str, strpiped); // return the number of pipe
+    int piped = parsePipe(str, strpiped);
 
     if (piped > 0)
     {
         execArgsPiped(strpiped, piped);
+        return 1 + piped;
     }
-    else // no pipe
+    else
     {
-
         parseSpace(str, parsed);
         if (cmdHandler(parsed))
             return 0;
-        else
-            return 1;
+        return 1;
     }
-    return 1 + piped;
 }
 
 int main()
 {
     char inputString[_POSIX_ARG_MAX];
-    char *parsedArgs[_POSIX_ARG_MAX];
-    char *parsedArgsPiped[_POSIX_ARG_MAX];
     int execFlag = 0;
-    signal(SIGINT, signalHandler);
+    signal(SIGINT, signalHandler); // SIGINT means interrupt
     while (1)
     {
-
-        // take input
-        // printDir();
-        printf("\n");
         if (Input(inputString))
         {
             continue;
         }
 
         // process
-        execFlag = processString(inputString, parsedArgs, parsedArgsPiped);
+        execFlag = processString(inputString, g_parsedArgs, g_parsedArgsPiped);
 
         // execute
         if (execFlag == 1)
         {
-            executeArgs(parsedArgs);
+            executeArgs(g_parsedArgs);
         }
         if (execFlag > 1)
         {
-            execArgsPiped(parsedArgs, execFlag - 1);
+            execArgsPiped(g_parsedArgs, execFlag - 1);
         }
     }
 
-    for (int i = 0; parsedArgs[i] != NULL; i++)
-    {
-        free(parsedArgs[i]);
-    }
-    for (int i = 0; parsedArgsPiped[i] != NULL; i++)
-    {
-        free(parsedArgsPiped[i]);
-    }
-
+    cleanup(g_parsedArgs, g_parsedArgsPiped);
     return 0;
 }
