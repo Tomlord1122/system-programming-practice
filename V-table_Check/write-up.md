@@ -2,7 +2,7 @@
 
 ## Introduction
 
-In this assignment, we implemented a V-Table pointer checker pass in LLVM based on LLVM 16.0.0. The goal of this pass is to ensure the security of V-Table pointers by verifying that they point to read-only memory regions. This write-up provides a detailed explanation of the source code, how to test the plugin and the runtime library, and the contributions from each team member.
+In this repo, we implemented a V-Table pointer checker pass in LLVM based on LLVM 16.0.0. The goal of this pass is to ensure the security of V-Table pointers by verifying that they point to read-only memory regions. This write-up provides a detailed explanation of the source code, how to test the plugin and the runtime library, and the contributions from each team member.
 
 ## Source Code Explanation
 
